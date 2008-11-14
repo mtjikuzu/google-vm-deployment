@@ -38,17 +38,13 @@ Several main functional utilities can be derived from this:
 		<vadk:AppUrlName>Appliance Builder Package Repository</vadk:AppUrlName>
 		<vadk:Logo></vadk:Logo>
 		<vadk:LogoUrl></vadk:LogoUrl>
-		<vadk:WelcomeText>Welcome to the Appliance Builder Package Repository!
+		<vadk:WelcomeText>Before you continue, a few things will need to be taken into account:
+1.) You should provision for this appliance a persistent hostname; and
+2.) If this appliance is to face the Internet, you will need to secure it.
 
-Before you continue, a few things will need to be taken into account:
-
-1.) You should provision for this appliance a persistent hostname that will never change; and
-2.) If this appliance is to face the Internet at large, you will need to secure it since it has right now no policies preventing access.
-
-Once these things have been taken into account, you may proceed with the fun stuff:
-
-1.) Once you have provisioned the hostname and reachable network access from the dependent hosts, you will want to set that hostname value on the machine itself and reboot; and
-2.) You will want to run &apos;generate_repository_package.sh,&apos; which will, in turn, generate a new RPM package that registers the repository as a package source for dependent machines. The output whereof will be available at http://${hostname}/repository/5/noarch/abpr-${version}.noarch.rpm.</vadk:WelcomeText>
+Once these things have been taken into account, do these:
+1.) Once you have provisioned the hostname and reachable network access from the dependent hosts, you will want to set that hostname and reboot; and
+2.) You will want to run &apos;generate_repository_package.sh,&apos; which will generate a new RPM package that registers the repository as a package source for dependent machines. The output whereof will be available at http://${hostname}/repository/5/noarch/abpr-${version}.noarch.rpm.</vadk:WelcomeText>
 	</Section>
 	<Section xsi:type="ovf:EulaSection_Type" xml:lang="en">
 		<Info>End User License Agreement</Info>
@@ -413,9 +409,9 @@ Public License instead of this License.</License>
 			<vadk:Package vadk:name="vixie-cron"/>
 		</vadk:OSPackages>
 		<vadk:BootActions>
-			<vadk:FirstBoot>yum -y -v clean all
-yum -y -v update</vadk:FirstBoot>
-			<vadk:SubsequentBoot></vadk:SubsequentBoot>
+			<vadk:FirstBoot>yum -y -v update
+yum -y -v clean all</vadk:FirstBoot>
+			<vadk:SubsequentBoot>yum -y -v clean all</vadk:SubsequentBoot>
 		</vadk:BootActions>
 		<vadk:Users>
 			<vadk:User vadk:username="root" vadk:password="RGVmYXVsdEcwMGdsZQ==" vadk:passwordFormat="base64" vadk:fullname="" vadk:uid=""/>
@@ -575,7 +571,7 @@ lang=en_US keymap=us ramdisk_size=100000
 		<vadk:ProvisioningTimeouts vadk:pxe="600" vadk:poweroff="25" vadk:hang="7200"/>
 		<vadk:IsoCache>[VADK.vadkRoot]/cache/build/ISO</vadk:IsoCache>
 		<vadk:IsoCache>/mnt/ISO</vadk:IsoCache>
-		<vadk:PreInstallShellScript>echo &quot;pre-install shell code&quot;</vadk:PreInstallShellScript>
+		<vadk:PreInstallShellScript></vadk:PreInstallShellScript>
 		<vadk:PostInstallShellScript>yum -y update
 yum -y -v clean all
 
