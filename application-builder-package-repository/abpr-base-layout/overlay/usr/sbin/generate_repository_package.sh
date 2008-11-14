@@ -33,11 +33,19 @@ output=${REPOSITORY_PACKAGE_REPO_FILE%%.in}
 sed "s/##HOSTNAME##/${hostname}/g" "${REPOSITORY_PACKAGE_REPO_FILE}" \
   > /usr/src/redhat/SOURCES/"${output}"
 
+raw_mac_address=$(ifconfig eth0 | awk -F'HWaddr' '/HWaddr/ { print $2 }')
+# Strip any whitespace.
+read mac_address <<< "${raw_mac_address}";
+
+raw_ip_address=$(ifconfig eth0 | awk -F'inet addr:' '/inet addr/ { print $2 }')
+raw_ip_address=${raw_ip_address%%Bcast*}
+read ip_address <<< "${raw_ip_address}";
+
 cat <<EOF
 
 The hostname ${hostname} will be used for the repository.
 
-If this is incorrect, ...
+If this is incorrect or undesired, ...
 
  * Depress ^C now,
  * Give this machine a fully-qualified and accessible hostname
@@ -48,11 +56,15 @@ If this is incorrect, ...
 REMEMBER: This hostname must be persistent between reboots and instance
           relocations.
 
-In 30 seconds this will continue.
+Notes for DHCP Administrators:
+ IP Address: ${ip_address}
+ MAC Address: ${mac_address}
+
+In 60 seconds, this will continue.
 
 EOF
 
-sleep 30
+sleep 60
 
 rpmbuild -ba "${REPOSITORY_PACKAGE_REPO_SPEC}"
 
