@@ -20,4 +20,4 @@
 MAILTO=""
 PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
 
-* 3 * * * /usr/local/sbin/regenerate_repository.sh
+* 3 * * * root /usr/sbin/regenerate_repository.sh

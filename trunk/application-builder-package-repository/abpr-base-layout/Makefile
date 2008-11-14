@@ -19,9 +19,20 @@
 
 all: srpm
 
-srpm:
+abpr-base-layout-overlay.tar.gz:
 	(cd overlay ; tar czvf ../abpr-base-layout-overlay.tar.gz \
 	 --exclude=.svn .)
+
+srpm: abpr-base-layout-overlay.tar.gz
+
 clean:
 	-rm *.rpm
 	-rm *.tar.gz
+
+install: srpm
+	cp -f abpr-base-layout-overlay.tar.gz /usr/src/redhat/SOURCES
+	cp -f abpr-base-layout.spec /usr/src/redhat/SPECS 
+
+uninstall:
+	rm -f /usr/src/redhat/SOURCES/abpr-base-layout-overlay.tar.gz
+	rm -f /usr/src/redhat/SPECS/abpr-base-layout.spec

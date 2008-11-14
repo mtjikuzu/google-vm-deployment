@@ -18,7 +18,7 @@
 # $Id$
 
 Name: abpr-base-layout
-Version: 1
+Version: 2
 Release: 1
 Summary: The base environment configuration for the repository appliance.
 Group: System Environment/Base
@@ -50,5 +50,9 @@ rm -rf "${RPM_BUILD_ROOT}"
 %config %{_sysconfdir}/cron.d/regenerate
 
 %changelog
+* Fri Nov 14 2008 Matt Proud  2-1
+- Fix CRON definition problems.
+- Migrate binaries to Linux FHS-compatible locations.
+
 * Thu Nov 13 2008 Matt Proud  1-1
 - Initial creation.
