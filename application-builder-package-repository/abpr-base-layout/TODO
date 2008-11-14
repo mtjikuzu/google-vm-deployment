@@ -1,0 +1,3 @@
+# $Id$
+
+* Verify and migrate files to Linux FHS- and LSB-compatible locations.
