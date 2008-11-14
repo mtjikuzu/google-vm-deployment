@@ -20,7 +20,8 @@
 all: srpm
 
 srpm:
-	(cd overlay ; tar czvf ../abpr-base-layout-overlay.tar.gz .)
+	(cd overlay ; tar czvf ../abpr-base-layout-overlay.tar.gz \
+	 --exclude=.svn .)
 clean:
 	-rm *.rpm
 	-rm *.tar.gz
