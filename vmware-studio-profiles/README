@@ -1,0 +1,24 @@
+$Id$
+
+= General
+
+These are appliance build profiles to be used with VMware Studio itself. Basic
+information fields have been filled in, but site-specific fields such as
+hostnames, usernames, passwords, etc. will need to be provided by you.
+
+Be sure to validate the appliance build profile after modifying it.
+
+During the appliance build phase, VMware Studio may report that the appliance
+build has taken more than the required 30 minutes. If this is the case, consider
+opening the build in VMware Server Console and inspecting the the virtual
+terminals one through four. To make appliance deployment easiest for end-users,
+some of the appliance profiles perform a package update, which may take a while
+to finish. SEE: ALT + F2 and inputting ps to see if yum is running.
+
+= appliance-builder-package-repository.xml
+
+This build profile creates a semi-managed YUM repository server.
+
+Do note that this appliance may require 15 gigabytes of disk space once it is
+running. By default, it is small; but it has capacity to grow to house your
+packages.
