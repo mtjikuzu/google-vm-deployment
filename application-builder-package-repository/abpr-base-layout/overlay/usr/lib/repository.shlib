@@ -1,6 +1,3 @@
-#!/bin/sh
-#
-# Create repository directories and ensure permissions stay sane.
 # Copyright (C) 2008  Matt T. Proud <matt.proud@gmail.com>
 # 
 # This program is free software; you can redistribute it and/or
@@ -20,11 +17,8 @@
 #
 # $Id$
 
-. /usr/local/lib/repository.shlib
-
-mkdir -p "${REPOSITORY_LOCATION}/${SYSTEM_VERSION}/"{noarch,i386,i486,i586,i686,SRPMS}
-
-mkdir -p "${GNUPG_LOCATION}"
-
-chmod -R a+r "${REPOSITORY_LOCATION}"
-find "${REPOSITORY_LOCATION}/" -type d -exec chmod a+x '{}' ';'
+SYSTEM_VERSION=5
+REPOSITORY_LOCATION=/var/www/html/repository
+REPOSITORY_PACKAGE_LOCATION=/usr/share/repository/package
+REPOSITORY_PACKAGE_REPO_FILE=abpr.repo.in
+REPOSITORY_PACKAGE_REPO_SPEC=abpr.spec

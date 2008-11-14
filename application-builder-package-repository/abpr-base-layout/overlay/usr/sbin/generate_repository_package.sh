@@ -20,7 +20,9 @@
 #
 # $Id$
 
-. "/usr/local/lib/repository.shlib"
+# TODO(mtp): Migrate this to an SRPM or something.
+
+. "/usr/lib/repository.shlib"
 
 hostname=$(hostname -f)
 
@@ -56,3 +58,5 @@ rpmbuild -ba "${REPOSITORY_PACKAGE_REPO_SPEC}"
 
 find /usr/src/redhat/RPMS/ -name 'abpr*noarch*.rpm' -exec cp '{}' \
   "${REPOSITORY_LOCATION}/${SYSTEM_VERSION}/noarch/" ';'
+
+regenerate_repository.sh

@@ -20,6 +20,6 @@
 #
 # $Id$
 
-. /usr/local/lib/repository.shlib
+. /usr/lib/repository.shlib
 
 createrepo "${REPOSITORY_LOCATION}/${SYSTEM_VERSION}"
