@@ -19,7 +19,7 @@
 
 Name: abpr-base-layout
 Version: 2
-Release: 1
+Release: 2
 Summary: The base environment configuration for the repository appliance.
 Group: System Environment/Base
 License: GPLv2
@@ -40,6 +40,12 @@ This package provides a variety of management tools and configurations for the r
 mkdir -vp "${RPM_BUILD_ROOT}"
 tar xzvf "%{SOURCE0}" -C "${RPM_BUILD_ROOT}"
 
+%post
+service crond restart >/dev/null 2>&1
+
+%postun
+service crond restart >/dev/null 2>&1
+
 %clean
 rm -rf "${RPM_BUILD_ROOT}"
 
@@ -50,6 +56,10 @@ rm -rf "${RPM_BUILD_ROOT}"
 %config %{_sysconfdir}/cron.d/regenerate
 
 %changelog
+* Fri Nov 14 2008 Matt Proud 2-2
+- Release Bump: Generated package did not include upstream fixes.
+- Restart CRON, because it does not appear to poll properly.
+
 * Fri Nov 14 2008 Matt Proud  2-1
 - Fix CRON definition problems.
 - Migrate binaries to Linux FHS-compatible locations.
