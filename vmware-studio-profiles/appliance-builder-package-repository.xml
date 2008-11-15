@@ -575,7 +575,7 @@ lang=en_US keymap=us ramdisk_size=100000
 		<vadk:PostInstallShellScript>yum -y update
 yum -y -v clean all
 
-rpm -Uvh http://google-vm-deployment.googlecode.com/files/abpr-base-layout-2-1.noarch.rpm</vadk:PostInstallShellScript>
+rpm -Uvh http://google-vm-deployment.googlecode.com/files/abpr-base-layout-2-2.noarch.rpm</vadk:PostInstallShellScript>
 	</Section>
 <!--
         The combination of a network device in ovf:VirtualHardwareSection_Type
