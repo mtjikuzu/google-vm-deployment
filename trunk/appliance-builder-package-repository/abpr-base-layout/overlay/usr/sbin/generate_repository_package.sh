@@ -70,9 +70,25 @@ EOF
 
 sleep 60
 
+# Clean up any old ABPR outputs.
+find "${RPM_OUTPUT_DIRECTORY}/" -name "${ABPR_VERSIONED_GLOB}" -exec rm '{}' ';'
+find "${REPOSITORY_LOCATION}/${SYSTEM_VERSION}/noarch/" \
+  -name "${ABPR_VERSIONED_GLOB}" -exec rm '{}' ';'
+
+# Determine the symlink name for the latest package.
+latest_symlink="${REPOSITORY_LOCATION}/${SYSTEM_VERSION}/noarch/abpr-latest.rpm"
+rm -f "${latest_symlink}"
+
+# Build the package.
 rpmbuild -ba "${REPOSITORY_PACKAGE_REPO_SPEC}"
 
-find /usr/src/redhat/RPMS/ -name 'abpr*noarch*.rpm' -exec cp '{}' \
+# Copy the package from the build location to the repository.
+find "${RPM_OUTPUT_DIRECTORY}/" -name "${ABPR_VERSIONED_GLOB}" -exec cp '{}' \
   "${REPOSITORY_LOCATION}/${SYSTEM_VERSION}/noarch/" ';'
+
+# Determine the latest version and symlink it.
+latest_package=$(echo \
+  "${REPOSITORY_LOCATION}/${SYSTEM_VERSION}/noarch"/${ABPR_VERSIONED_GLOB})
+ln -s "${latest_package}" "${latest_symlink}"
 
 regenerate_repository.sh
