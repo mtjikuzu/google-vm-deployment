@@ -20,7 +20,11 @@
 #
 # $Id$
 
-. /usr/lib/repository.shlib
+. "/usr/lib/repository.shlib"
+
+wait_for_lock
+trap remove_lock EXIT INT TERM
+create_lock
 
 mkdir -p "${REPOSITORY_LOCATION}/${SYSTEM_VERSION}/"{noarch,i386,i486,i586,i686,SRPMS}
 

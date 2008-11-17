@@ -20,5 +20,11 @@
 #
 # $Id$
 
+. "/usr/lib/repository.shlib"
+
+wait_for_lock
+trap remove_lock EXIT INT TERM
+create_lock
+
 chkconfig --levels 2345 crond on
 chkconfig --levels 235 httpd on

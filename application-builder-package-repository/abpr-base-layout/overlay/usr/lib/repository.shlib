@@ -17,8 +17,58 @@
 #
 # $Id$
 
-SYSTEM_VERSION=5
+###############################################################################
+# Processing Rules
+###############################################################################
+
+set -o nounset
+
+###############################################################################
+# Constants
+###############################################################################
+
+_full_script_name=${0%%.sh}
+_partial_lock_file=${_full_script_name##*/}
+LOCK_FILE="/var/run/repository/${_partial_lock_file}.pid"
+
 REPOSITORY_LOCATION=/var/www/html/repository
 REPOSITORY_PACKAGE_LOCATION=/usr/share/repository/package
 REPOSITORY_PACKAGE_REPO_FILE=abpr.repo.in
 REPOSITORY_PACKAGE_REPO_SPEC=abpr.spec
+
+SYSTEM_VERSION=5
+
+###############################################################################
+# Functions
+###############################################################################
+
+remove_lock() {
+  rm -f "${LOCK_FILE}"
+}
+
+create_lock() {
+  echo ${$} > "${LOCK_FILE}"
+}
+
+lock_exists() {
+  local lock_process
+
+  [[ -f "${LOCK_FILE}" ]] || return 1
+
+  lock_process=$(< "${LOCK_FILE}")
+  ps "${lock_process}" > /dev/null 2>&1
+  return ${?}
+}
+
+wait_for_lock() {
+  if lock_exists; then
+    echo -n "Lock exists; waiting ..."
+  fi
+
+  while lock_exists; do
+    echo -n '.'
+    sleep 1
+  done
+
+  echo
+}

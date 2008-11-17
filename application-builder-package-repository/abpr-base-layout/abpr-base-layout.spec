@@ -18,15 +18,15 @@
 # $Id$
 
 Name: abpr-base-layout
-Version: 2
-Release: 2
+Version: 3
+Release: 1
 Summary: The base environment configuration for the repository appliance.
 Group: System Environment/Base
 License: GPLv2
 Source0: abpr-base-layout-overlay.tar.gz
 BuildRoot: %{_builddir}/%{name}-%{version}-rpmroot
 BuildArch: noarch
-Requires: centos-release >= %{version}, vixie-cron, rpm-build, createrepo, findutils, httpd
+Requires: centos-release >= %{version}, createrepo, findutils, httpd, rpm-build, vixie-cron
 
 %description
 This package provides a variety of management tools and configurations for the repository appliance.
@@ -56,6 +56,9 @@ rm -rf "${RPM_BUILD_ROOT}"
 %config %{_sysconfdir}/cron.d/regenerate
 
 %changelog
+* Sun Nov 16 2008 Matt Proud 3-1
+- Created basic locking framework for infrastructure scripts.
+
 * Fri Nov 14 2008 Matt Proud 2-2
 - Release Bump: Generated package did not include upstream fixes.
 - Restart CRON, because it does not appear to poll properly.
