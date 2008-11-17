@@ -56,6 +56,10 @@ rm -rf "${RPM_BUILD_ROOT}"
 %config %{_sysconfdir}/cron.d/regenerate
 
 %changelog
+* Mon Nov 17 2008 Matt Proud 4-1
+- Moved more constants to the shlib file.
+- Added latest repository package support.
+
 * Sun Nov 16 2008 Matt Proud 3-1
 - Created basic locking framework for infrastructure scripts.
 
