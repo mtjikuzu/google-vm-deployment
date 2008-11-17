@@ -12,6 +12,8 @@
 Several main functional utilities can be derived from this:
 1.) Virtual appliance auto builders can refer to this appliance as a package source and populate it with their own packages; and
 2.) Appliance-inspecific packages may be placed here by enterprising engineers for use on any given appliance.
+
+
 $Id$</Annotation>
 	</Section>
 	<Section xsi:type="ovf:ProductSection_Type" ovf:required="false">
@@ -403,9 +405,10 @@ Public License instead of this License.</License>
 			<vadk:url>http://[VADK.localIP]/ISV/appliancePackages</vadk:url>
 		</vadk:ApplicationPackages>
 		<vadk:OSPackages><!-- Additional OS packages needed by the ISV's application --><!-- <vadk:Package vadk:name="foo"/> -->
-			<vadk:Package vadk:name="httpd"/>
 			<vadk:Package vadk:name="gnupg"/>
+			<vadk:Package vadk:name="httpd"/>
 			<vadk:Package vadk:name="rpm-build"/>
+			<vadk:Package vadk:name="rsync"/>
 			<vadk:Package vadk:name="vixie-cron"/>
 		</vadk:OSPackages>
 		<vadk:BootActions>
