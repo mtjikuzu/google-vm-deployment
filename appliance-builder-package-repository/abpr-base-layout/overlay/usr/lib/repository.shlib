@@ -27,6 +27,8 @@ set -o nounset
 # Constants
 ###############################################################################
 
+ABPR_VERSIONED_GLOB='abpr-[0-9]*noarch.rpm'
+
 _full_script_name=${0%%.sh}
 _partial_lock_file=${_full_script_name##*/}
 LOCK_FILE="/var/run/repository/${_partial_lock_file}.pid"
@@ -35,6 +37,8 @@ REPOSITORY_LOCATION=/var/www/html/repository
 REPOSITORY_PACKAGE_LOCATION=/usr/share/repository/package
 REPOSITORY_PACKAGE_REPO_FILE=abpr.repo.in
 REPOSITORY_PACKAGE_REPO_SPEC=abpr.spec
+
+RPM_OUTPUT_DIRECTORY=/usr/src/redhat/RPMS
 
 SYSTEM_VERSION=5
 
