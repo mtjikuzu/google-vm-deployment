@@ -24,6 +24,10 @@
 
 . "/usr/lib/repository.shlib"
 
+wait_for_lock
+trap remove_lock EXIT INT TERM
+create_lock
+
 hostname=$(hostname -f)
 
 cd "${REPOSITORY_PACKAGE_LOCATION}"
