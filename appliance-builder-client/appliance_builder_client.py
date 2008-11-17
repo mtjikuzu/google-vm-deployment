@@ -26,10 +26,12 @@ A detailed description of appliance_builder.
 """
 
 __author__ = 'matt.proud@gmail.com (Matt Proud)'
+__version__ = '$Revision$'
 
 import base64
 import glob
 import logging
+import optparse
 import os
 import subprocess
 import sys
@@ -44,7 +46,7 @@ SLEEP_CHECK_INTERVAL = 1
 
 
 class ValidationError(RuntimeError):
-  def __init__(self, message, throwable):
+  def __init__(self, message, throwable=None):
     RuntimeError.__init__(self, message)
     self._throwable = throwable
     self._message = message
@@ -180,19 +182,15 @@ class BoundedSubprocess(object):
         raise e
 
 
-class VmwareStudio(object):
-  _VENDOR_PACKAGES_DESTINATION = '/opt/vmware/www/ISV/appliancePackages'
-
-  def __init__(self, host_name, ssh_key_file, packages_source,
-               configuration_manager, user='root'):
+class ServiceMediator(object):
+  def __init__(self, host_name, ssh_key_file, user='root'):
     self._host_name = host_name
     self._ssh_key_file = ssh_key_file
-    self._packages_source = packages_source
-    self._configuration_manager = configuration_manager
     self._user = user
 
   def _DeriveHostSpec(self):
-    return '%s@%s' % (self._user, self._host_name)
+    return ''.join([self._user, '@', self._host_name])
+
 
   def RemoteInvoke(self, *args, **kwargs):
     arguments = ['/usr/bin/ssh', '-i', self._ssh_key_file,
@@ -200,42 +198,56 @@ class VmwareStudio(object):
     arguments.extend(args)
     return BoundedSubprocess(*arguments, **kwargs)
 
+
+class YumRepository(ServiceMediator):
+  _PACKAGES_BASE_DESTINATION = '/var/www/html/repository/5'
+
+  def __init__(self, host_name, ssh_key_file, packages_source,
+               configuration_manager, user='root'):
+    ServiceMediator.__init__(self, host_name, ssh_key_file, user=user)
+    self._packages_source = packages_source
+    self._configuration_manager = configuration_manager
+
   def Validate(self):
-    logging.info('Checking if the SSH identity file exists ...')
-    if not os.path.exists(self._ssh_key_file):
-      raise ValidationError('The SSH key identity file "%s" does not exist.' % (
-          self._ssh_key_file), None)
-
-    logging.info(('Checking whether the SSH identity file is valid '
-                  'and that remote commands may be executed on the Vmware '
-                  'Studio host.'))
-    true_instance = self.RemoteInvoke('/bin/true')
-    try:
-      true_instance.Invoke()
-    except SubprocessError, e:
-      raise ValidationError('A simple SSH command could not be run.', e)
-
     logging.info('Checking whether the vendor packages directory exists ...')
     if not os.path.isdir(self._packages_source):
-      raise ValidationError('The vendor packages directory does not exist.',
-                            None)
+      raise ValidationError('The vendor packages directory does not exist.')
 
     logging.info('Validating whether RPMs exist ...')
     rpms = glob.glob(os.path.join(self._packages_source, '*.rpm'))
     if not rpms:
-      raise ValidationError('No RPM files were found ...', None)
+      raise ValidationError('No RPM files were found ...')
 
     logging.info('Checking whether rsync is available ....')
     # Notes(mtp): os.path.join is insufficient here.
     rsync_path_spec = '%s:%s/' % (self._DeriveHostSpec(),
-                                  self._VENDOR_PACKAGES_DESTINATION)
+                                  self._PACKAGES_BASE_DESTINATION)
     rsync_instance = BoundedSubprocess('/usr/bin/rsync', '-e',
                                        'ssh -i %s' % self._ssh_key_file,
                                        rsync_path_spec)
     try:
       rsync_instance.Invoke()
     except SubprocessError, e:
-      raise ValidationError('A simple rsync operation could not be run.', e)
+      raise ValidationError('A simple rsync operation could not be run.',
+                            throwable=e)
+
+  def CopyVendorPackages(self):
+    logging.info('Copying vendor packages ...')
+    sys.exit(1)
+    
+    rsync_instance = BoundedSubprocess(
+        '/usr/bin/rsync', '-rltzvc', '-e', 'ssh -i %s' % self._ssh_key_file,
+        ''.join([self._packages_source, '/']), '%s:%s' % (
+            self._DeriveHostSpec(), self._PACKAGES_BASE_DESTINATION))
+    rsync_instance.Invoke()
+
+    chmod_instance = self.RemoteInvoke('/bin/chmod', '-R', 'a+r',
+                                       self._PACKAGES_BASE_DESTINATION)
+    chmod_instance.Invoke()
+
+    chmod_instance = self.RemoteInvoke('/bin/chmod', 'a+x',
+                                       self._PACKAGES_BASE_DESTINATION)
+    chmod_instance.Invoke()
 
   def UpdatePackagesList(self):
     logging.info('Updating packages list ...')
@@ -259,21 +271,28 @@ class VmwareStudio(object):
     self._configuration_manager.configuration['APPLIANCE_PACKAGES'] = ''.join(
         package_definitions)
 
-  def CopyVendorPackages(self):
-    logging.info('Copying vendor packages ...')
-    rsync_instance = BoundedSubprocess(
-        '/usr/bin/rsync', '-rltzvc', '-e', 'ssh -i %s' % self._ssh_key_file,
-        ''.join([self._packages_source, '/']), '%s:%s' % (
-            self._DeriveHostSpec(), self._VENDOR_PACKAGES_DESTINATION))
-    rsync_instance.Invoke()
 
-    chmod_instance = self.RemoteInvoke('/bin/chmod', '-R', 'a+r',
-                                       self._VENDOR_PACKAGES_DESTINATION)
-    chmod_instance.Invoke()
+class VmwareStudio(ServiceMediator):
+  def __init__(self, host_name, ssh_key_file,
+               configuration_manager, user='root'):
+    ServiceMediator.__init__(self, host_name, ssh_key_file, user=user)
+    self._configuration_manager = configuration_manager
 
-    chmod_instance = self.RemoteInvoke('/bin/chmod', 'a+x',
-                                       self._VENDOR_PACKAGES_DESTINATION)
-    chmod_instance.Invoke()
+  def Validate(self):
+    logging.info('Checking if the SSH identity file exists ...')
+    if not os.path.exists(self._ssh_key_file):
+      raise ValidationError('The SSH key identity file "%s" does not exist.' % (
+          self._ssh_key_file))
+
+    logging.info(('Checking whether the SSH identity file is valid '
+                  'and that remote commands may be executed on the Vmware '
+                  'Studio host.'))
+    true_instance = self.RemoteInvoke('/bin/true')
+    try:
+      true_instance.Invoke()
+    except SubprocessError, e:
+      raise ValidationError('A simple SSH command could not be run.',
+                            throwable=e)
 
 
 class ConfigurationManager(object):
@@ -314,7 +333,7 @@ class ConfigurationManager(object):
     for key, value in self.configuration.iteritems():
       if value is None:
         message = 'Configuration key "%s" must be defined.' % key
-        raise ValidationError(message, None)
+        raise ValidationError(message)
 
 
 class VmwareStudioTemplate(object):
@@ -329,7 +348,7 @@ class VmwareStudioTemplate(object):
     if not os.path.exists(self._studio_template_file):
       message = 'The studio template %s does not exist.' % (
           self._studio_template_file)
-      raise ValidationError(message, None)
+      raise ValidationError(message)
 
     logging.info('Validating the studio template file ...')
 
@@ -346,7 +365,7 @@ class VmwareStudioTemplate(object):
     if not_found_keys:
       message = 'The following keys are unaddressed by the template: %s' % (
           ', '.join(not_found_keys))
-      raise ValidationError(message, None)
+      raise ValidationError(message)
 
   def GenerateBuildProfile(self):
     logging.info('Generating build profile from template to %s ...' % (
@@ -360,8 +379,9 @@ class VmwareStudioTemplate(object):
           left, right = line.split(what_to_find, 1)
           line = ''.join([left, str(value), right])
       self._generated_studio_file.write(line)
+      # Notes(mtp): Flushing is done explicitly, due to some wonky behavior in
+      # tempfile module.
       self._generated_studio_file.file.flush()
-    time.sleep(360)
 
 
 def _SetupLogging():
@@ -369,41 +389,88 @@ def _SetupLogging():
                       format='%(levelname)s :: %(message)s')
 
 
-def main(argv):
+class Runner(object):
+  def __init__(self, arguments):
+    self._arguments = arguments
+    self._SetupOptions()
+
+  def _SetupOptions(self):
+    usage = ('%prog [options] '
+             '<vmware studio host> '
+             '<vmware studio ssh identity key file> '
+             '<vmware studio template file> '
+             '<yum repository host> '
+             '<yum repository ssh identity key file> '
+             '<secure configuration file> '
+             '<packages directory> ')
+
+    version = '%prog $Revision$'
+
+    self._option_parser = optparse.OptionParser(usage=usage, version=version)
+
+    self._option_parser.add_option('-v', '--verbose', action='store_true',
+                                   dest='verbose')
+
+    self._option_parser.set_defaults(verbose=False)
+
+  def Run(self):
+    self._ProcessOptions()
+
+    configuration_manager = None
+    vmware_studio = None
+    vmware_studio_template = None
+    yum_repository = None
+
+    try:
+      configuration_manager = ConfigurationManager(
+          self._secure_configuration_file)
+      configuration_manager.Validate()
+
+      vmware_studio = VmwareStudio(self._vmware_studio_host,
+                                   self._vmware_studio_ssh_identity_key_file,
+                                   configuration_manager)
+      vmware_studio.Validate()
+
+      vmware_studio_template = VmwareStudioTemplate(
+          self._vmware_studio_template_file,
+          configuration_manager)
+      vmware_studio_template.Validate()
+      yum_repository = YumRepository(self._yum_repository_host,
+                                     self._yum_repository_ssh_identity_key_file,
+                                     self._packages_directory,
+                                     configuration_manager)
+      yum_repository.Validate()
+    except ValidationError, validation_error:
+      logging.error(validation_error)
+      sys.exit(1)
+
+    yum_repository.UpdatePackagesList()
+    vmware_studio_template.GenerateBuildProfile()
+    yum_repository.CopyVendorPackages()
+    
+  def _ProcessOptions(self):
+    options, arguments = self._option_parser.parse_args(self._arguments)
+
+    if len(arguments) != 7:
+      self._option_parser.error('Incorrect arguments.')
+
+    if '' in arguments or None in arguments:
+      self._option_parser.error('Blank values may not be provided.')
+
+    argument_names = ['vmware_studio_host',
+                      'vmware_studio_ssh_identity_key_file',
+                      'vmware_studio_template_file', 'yum_repository_host',
+                      'yum_repository_ssh_identity_key_file',
+                      'secure_configuration_file', 'packages_directory']
+    argument_names = [''.join(['_', name]) for name in argument_names]
+    argument_name_and_values = zip(argument_names, arguments)
+    mappings = dict(argument_name_and_values)
+    self.__dict__.update(mappings)
+
+def main(arguments):
   _SetupLogging()
-
-  secure_configuration_file = argv[1]
-  vmware_studio_template = argv[2]
-  vmware_studio_host = argv[3]
-  identity_key = argv[4]
-  packages_directory = argv[5]
-
-  configuration_manager = ConfigurationManager(secure_configuration_file)
-  try:
-    configuration_manager.Validate()
-  except ValidationError, e:
-    logging.error(e)
-    sys.exit(1)
-
-  vmware_studio = VmwareStudio(vmware_studio_host, identity_key,
-                               packages_directory, configuration_manager)
-  try:
-    vmware_studio.Validate()
-  except ValidationError, e:
-    logging.error(e)
-    sys.exit(1)
-
-  vmware_studio_template = VmwareStudioTemplate(vmware_studio_template,
-                                                configuration_manager)
-  try:
-    vmware_studio_template.Validate()
-  except ValidationError, e:
-    logging.error(e)
-    sys.exit(1)
-
-  vmware_studio.CopyVendorPackages()
-  vmware_studio.UpdatePackagesList()
-  vmware_studio_template.GenerateBuildProfile()
+  runner = Runner(arguments)
+  runner.Run()
 
 if __name__ == '__main__':
-  main(sys.argv)
+  main(sys.argv[1:])
