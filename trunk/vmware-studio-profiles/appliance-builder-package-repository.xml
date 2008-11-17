@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- $Id$ -->
 <ovf:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.dmtf.org/ovf/envelope/1 /opt/vmware/etc/build/schemas/vadk.xsd" xmlns:vadk="http://www.vmware.com/schema/vadk" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" ovf:version="0.7.0" vadk:version="0.81">
 	<References/>
 <!--
@@ -12,7 +11,8 @@
 
 Several main functional utilities can be derived from this:
 1.) Virtual appliance auto builders can refer to this appliance as a package source and populate it with their own packages; and
-2.) Appliance-inspecific packages may be placed here by enterprising engineers for use on any given appliance.</Annotation>
+2.) Appliance-inspecific packages may be placed here by enterprising engineers for use on any given appliance.
+$Id$</Annotation>
 	</Section>
 	<Section xsi:type="ovf:ProductSection_Type" ovf:required="false">
 		<Info>Appliance ISV branding information</Info>
@@ -575,7 +575,7 @@ lang=en_US keymap=us ramdisk_size=100000
 		<vadk:PostInstallShellScript>yum -y update
 yum -y -v clean all
 
-rpm -Uvh http://google-vm-deployment.googlecode.com/files/abpr-base-layout-2-2.noarch.rpm</vadk:PostInstallShellScript>
+rpm -Uvh http://google-vm-deployment.googlecode.com/files/abpr-base-layout-3-1.noarch.rpm</vadk:PostInstallShellScript>
 	</Section>
 <!--
         The combination of a network device in ovf:VirtualHardwareSection_Type

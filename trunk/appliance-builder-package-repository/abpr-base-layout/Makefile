@@ -26,8 +26,8 @@ abpr-base-layout-overlay.tar.gz:
 srpm: abpr-base-layout-overlay.tar.gz
 
 clean:
-	-rm *.rpm
-	-rm *.tar.gz
+	rm -f *.rpm
+	rm -f *.tar.gz
 
 install: srpm
 	cp -f abpr-base-layout-overlay.tar.gz /usr/src/redhat/SOURCES
@@ -36,3 +36,4 @@ install: srpm
 uninstall:
 	rm -f /usr/src/redhat/SOURCES/abpr-base-layout-overlay.tar.gz
 	rm -f /usr/src/redhat/SPECS/abpr-base-layout.spec
+
