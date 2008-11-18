@@ -18,7 +18,7 @@
 # $Id$
 
 Name: abpr-base-layout
-Version: 3
+Version: 4
 Release: 1
 Summary: The base environment configuration for the repository appliance.
 Group: System Environment/Base
