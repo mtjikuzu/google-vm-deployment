@@ -409,6 +409,7 @@ Public License instead of this License.</License>
 			<vadk:Package vadk:name="httpd"/>
 			<vadk:Package vadk:name="rpm-build"/>
 			<vadk:Package vadk:name="rsync"/>
+			<vadk:Package vadk:name="tmpwatch"/>
 			<vadk:Package vadk:name="vixie-cron"/>
 		</vadk:OSPackages>
 		<vadk:BootActions>
@@ -578,7 +579,7 @@ lang=en_US keymap=us ramdisk_size=100000
 		<vadk:PostInstallShellScript>yum -y update
 yum -y -v clean all
 
-rpm -Uvh http://google-vm-deployment.googlecode.com/files/abpr-base-layout-3-1.noarch.rpm</vadk:PostInstallShellScript>
+rpm -Uvh http://google-vm-deployment.googlecode.com/files/abpr-base-layout-4-1.noarch.rpm</vadk:PostInstallShellScript>
 	</Section>
 <!--
         The combination of a network device in ovf:VirtualHardwareSection_Type
