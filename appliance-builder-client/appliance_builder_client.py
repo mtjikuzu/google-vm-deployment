@@ -41,11 +41,13 @@ import time
 import urllib
 
 
-SLEEP_CHECK_INTERVAL = 1
+_SLEEP_CHECK_INTERVAL = 1
 
 # TODO(mtp): Constantize more strings.
 # TODO(mtp): Parameterize more aspects of operation.
-
+# TODO(mtp): Use urllib for URL joining.
+# TODO(mtp): Use optparser's option groups for merging logical groups.
+# TODO(mtp): Make initializers' method signatures sane.
 
 def CreateCommandFromItems(*command_pieces):
   """Create a command  for a shell interpreter from components.
@@ -293,7 +295,8 @@ class BoundedSubprocess(object):
     Raises:
       ReturnValueError: If the process returns an unexpected return value.
       TimeoutError: If the process runs longer than expected.
-    """
+
+      """
     logging.debug('Invoking %s ...' % (
         CreateCommandFromItems(self.command_and_arguments)))
     self._start_time = time.time()
@@ -305,7 +308,7 @@ class BoundedSubprocess(object):
     while not self._ExceededTimeout():
       if self._Finished():
         break
-      time.sleep(SLEEP_CHECK_INTERVAL)
+      time.sleep(_SLEEP_CHECK_INTERVAL)
 
     try:
       if self.timeout and not self._Finished():
@@ -336,8 +339,9 @@ class ServiceMediator(object):
   It works under the assumption that the remote host runs SSH and authentication
   occurs through SSH authorized keys.
   """
+  _SSH_KEYFILE_ARGUMENT = '-i'
 
-  def __init__(self, host_name, ssh_key_file, user='root'):
+  def __init__(self, host_name, ssh_key_file, ssh_path, user='root'):
     """Instantiate a ServiceMediator.
 
     Args:
@@ -345,11 +349,13 @@ class ServiceMediator(object):
                  where the commands will be run.
       ssh_key_file: A string of the fully-qualified file path of the SSH
                     private key.
+      ssh_path: A string of the fully-qualified path of the SSH program.
       user: An optional string of the username of the user who shall
             authenticate with the remote host.
     """
     self._host_name = host_name
     self._ssh_key_file = ssh_key_file
+    self._ssh_path = ssh_path
     self._user = user
 
   def _DeriveHostSpec(self):
@@ -384,7 +390,7 @@ class ServiceMediator(object):
       An instance of BoundedSubprocess that is designed to run against a remote
       host.
     """
-    arguments = ['/usr/bin/ssh', '-i', self._ssh_key_file,
+    arguments = [self._ssh_path, self._SSH_KEYFILE_ARGUMENT, self._ssh_key_file,
                  self._DeriveHostSpec()]
     arguments.extend(args)
     return BoundedSubprocess(*arguments, **kwargs)
@@ -396,10 +402,9 @@ class YumRepository(ServiceMediator):
   It performs such tasks as pushing files to the Yum server, regenerating
   repository metadata, and normalizing permissions.
   """
-  _HTTP_LOCATION = 'repository/5'
-  _PACKAGES_BASE_DESTINATION = os.path.join('/var/www/html', _HTTP_LOCATION)
 
-  def __init__(self, host_name, ssh_key_file, packages_source,
+  def __init__(self, host_name, ssh_key_file, ssh_path, packages_source,
+               webroot, repository_subdirectory, os_version_branch,
                configuration_manager, user='root'):
     """Instantiate a YumRepository.
 
@@ -408,15 +413,25 @@ class YumRepository(ServiceMediator):
                  where the commands will be run.
       ssh_key_file: A string of the fully-qualified file path of the SSH
                     private key.
+      ssh_path: A string of the fully-qualified path to the SSH command.
       packages_source: A string of the fully-qualified file path of the
                       directory that contains vendor packages.
+      webroot: A string of the fully-qualified path to the Yum server's webroot.
+      repository_subdirectory: A string snippet of the location relative to the
+                               webroot where the repository is located.
+      os_version_branch: A string of the CentOS release branch.
       configuration_manager: An instance of ConfigurationManager.
       user: An optional string of the username of the user who shall
             authenticate with the remote host.
     """
-    ServiceMediator.__init__(self, host_name, ssh_key_file, user=user)
+    ServiceMediator.__init__(self, host_name, ssh_key_file, ssh_path, user=user)
     self._packages_source = packages_source
     self._configuration_manager = configuration_manager
+    self._packages_base_destination = os.path.join(webroot,
+                                                   repository_subdirectory,
+                                                   os_version_branch)
+    self._http_location = os.path.join(repository_subdirectory,
+                                       os_version_branch)
 
   def Validate(self):
     """Determine whether the operating environment is sufficient to work.
@@ -437,7 +452,7 @@ class YumRepository(ServiceMediator):
     logging.info('Checking whether rsync is available ....')
     # Notes(mtp): os.path.join is insufficient here.
     rsync_path_spec = CreateStringFrom(self._DeriveHostSpec(), ':',
-                                       self._PACKAGES_BASE_DESTINATION, '/')
+                                       self._packages_base_destination, '/')
     rsync_instance = BoundedSubprocess('/usr/bin/rsync', '-e',
                                        'ssh -i %s' % self._ssh_key_file,
                                        rsync_path_spec)
@@ -507,7 +522,7 @@ class YumRepository(ServiceMediator):
         architecture = 'SRPMS'
 
       logging.info('Moving package to its final location ...')
-      remote_final_destination = os.path.join(self._PACKAGES_BASE_DESTINATION,
+      remote_final_destination = os.path.join(self._packages_base_destination,
                                               architecture)
       cp_instance = self.RemoteInvoke('/bin/cp', '-fpv',
                                       remote_temporary_destination,
@@ -530,11 +545,11 @@ class YumRepository(ServiceMediator):
 
     logging.info('Normalizing permissions ...')
     chmod_instance = self.RemoteInvoke('/bin/chmod', '-R', 'a+r',
-                                       self._PACKAGES_BASE_DESTINATION)
+                                       self._packages_base_destination)
     chmod_instance.Invoke()
 
     chmod_instance = self.RemoteInvoke('/bin/chmod', 'a+x',
-                                       self._PACKAGES_BASE_DESTINATION)
+                                       self._packages_base_destination)
     chmod_instance.Invoke()
 
     logging.info('Regenerating repository meta data ...')
@@ -543,7 +558,7 @@ class YumRepository(ServiceMediator):
     repository_regenerator.Invoke()
 
     repository_package_url = CreateStringFrom(
-        'http://', self._host_name, '/', self._HTTP_LOCATION, '/', 'noarch',
+        'http://', self._host_name, self._http_location, '/', 'noarch',
         '/', 'abpr-latest.rpm')
     repository_registration_command_partial = CreateCommandFromItems(
         'rpm', '-Uvh', repository_package_url)
@@ -574,7 +589,7 @@ class VmwareStudio(ServiceMediator):
   _ACCEPTABLE_STATES = ['finished', 'failed']
   # TODO(mtp): Copy the build result back to the requester.
 
-  def __init__(self, host_name, ssh_key_file,
+  def __init__(self, host_name, ssh_key_file, ssh_path,
                configuration_manager, appliance_zip_file_save_path,
                user='root'):
     """Instantiate a VmwareStudio.
@@ -584,13 +599,14 @@ class VmwareStudio(ServiceMediator):
                  where the commands will be run.
       ssh_key_file: A string of the fully-qualified file path of the SSH
                     private key.
+      ssh_path: A string of the fully-qualified path to the SSH command.
       configuration_manager: An instance of ConfigurationManager.
       appliance_zip_file_save_path: A string of the fully-qualified path to
                                     where the appliance will be saved.
       user: An optional string of the username of the user who shall
             authenticate with the remote host.
     """
-    ServiceMediator.__init__(self, host_name, ssh_key_file, user=user)
+    ServiceMediator.__init__(self, host_name, ssh_key_file, ssh_path, user=user)
     self._configuration_manager = configuration_manager
     self._appliance_zip_file_save_path = appliance_zip_file_save_path
 
@@ -877,9 +893,30 @@ class Runner(object):
                                    dest='remove_builder_repository',
                                    help=('remove the builder repository from '
                                          'the appliance after its creation'))
-
+    self._option_parser.add_option('-s', '--ssh-path', action='store',
+                                   dest='ssh_path', help=(
+                                       'the path to the SSH command'))
+    self._option_parser.add_option('-y', '--yum-webroot',
+                                   action='store',
+                                   dest='yum_webroot',
+                                   help=('the base webroot location on the '
+                                         'Yum repository'))
+    self._option_parser.add_option('-u', '--yum-repository-subdirectory',
+                                   action='store',
+                                   dest='yum_repository_subdirectory',
+                                   help=('the subdirectory of the webroot '
+                                         'where packages are to be stored.'))
+    self._option_parser.add_option('-o', '--os-base-version-branch',
+                                   action='store',
+                                   dest='os_base_version_branch',
+                                   help=('the base version of the CentOS'))
+    
     self._option_parser.set_defaults(verbose=False,
-                                     remove_builder_repository=True)
+                                     remove_builder_repository=True,
+                                     ssh_path='/usr/bin/ssh',
+                                     yum_webroot='/var/www/html',
+                                     yum_repository_subdirectory='repository',
+                                     os_base_version_branch='5')
 
   def Run(self):
     """Start the whole build process."""
@@ -899,6 +936,7 @@ class Runner(object):
 
       vmware_studio = VmwareStudio(self._vmware_studio_host,
                                    self._vmware_studio_ssh_identity_key_file,
+                                   self._ssh_path,
                                    configuration_manager,
                                    self._appliance_save_zip_file)
       vmware_studio.Validate()
@@ -909,7 +947,11 @@ class Runner(object):
       vmware_studio_template.Validate()
       yum_repository = YumRepository(self._yum_repository_host,
                                      self._yum_repository_ssh_identity_key_file,
+                                     self._ssh_path,
                                      self._packages_directory,
+                                     self._yum_webroot,
+                                     self._yum_repository_subdirectory,
+                                     self._os_base_version_branch,
                                      configuration_manager)
       yum_repository.Validate()
     except ValidationError, validation_error:
@@ -946,6 +988,10 @@ class Runner(object):
 
     self._remove_builder_repository = options.remove_builder_repository
     self._verbose = options.verbose
+    self._ssh_path = options.ssh_path
+    self._yum_webroot = options.yum_webroot
+    self._yum_repository_subdirectory = options.yum_repository_subdirectory
+    self._os_base_version_branch = options.os_base_version_branch
 
 
 def main(arguments):
