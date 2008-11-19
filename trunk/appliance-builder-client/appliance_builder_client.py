@@ -38,6 +38,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib
 
 
 SLEEP_CHECK_INTERVAL = 1
@@ -574,7 +575,8 @@ class VmwareStudio(ServiceMediator):
   # TODO(mtp): Copy the build result back to the requester.
 
   def __init__(self, host_name, ssh_key_file,
-               configuration_manager, user='root'):
+               configuration_manager, appliance_zip_file_save_path,
+               user='root'):
     """Instantiate a VmwareStudio.
 
     Args:
@@ -583,11 +585,14 @@ class VmwareStudio(ServiceMediator):
       ssh_key_file: A string of the fully-qualified file path of the SSH
                     private key.
       configuration_manager: An instance of ConfigurationManager.
+      appliance_zip_file_save_path: A string of the fully-qualified path to
+                                    where the appliance will be saved.
       user: An optional string of the username of the user who shall
             authenticate with the remote host.
     """
     ServiceMediator.__init__(self, host_name, ssh_key_file, user=user)
     self._configuration_manager = configuration_manager
+    self._appliance_zip_file_save_path = appliance_zip_file_save_path
 
   def Validate(self):
     """Determine whether the operating environment is sufficient to work.
@@ -654,6 +659,23 @@ class VmwareStudio(ServiceMediator):
                                        self._build_profile_path,
                                        timeout=(60 * 60))
     build_instance.Invoke()
+
+  def CopyAppliance(self):
+    """Copy the appliance from the VMware Studio to the local machine."""
+    logging.info('Getting the location of the build ...')
+    studiocli_instance = self.RemoteInvoke('/opt/vmware/bin/studiocli',
+                                           '--buildstatus',
+                                           stdout=subprocess.PIPE)
+    studiocli_instance.Invoke()
+    save_location = None
+    for line in studiocli_instance.popen_instance.stdout:
+      if 'VA ZIP URL:' in line:
+        line_content = line.split('VA ZIP URL:')
+        save_location = line_content.pop().strip()
+        break
+
+    logging.info('Copying built appliance to local machine ...')
+    urllib.urlretrieve(save_location, self._appliance_zip_file_save_path)
 
 
 class ConfigurationManager(object):
@@ -841,7 +863,8 @@ class Runner(object):
              '<yum repository host> '
              '<yum repository ssh identity key file> '
              '<secure configuration file> '
-             '<packages directory> ')
+             '<packages directory> '
+             '<appliance save ZIP file>')
 
     version = '%prog $Revision$'
 
@@ -876,7 +899,8 @@ class Runner(object):
 
       vmware_studio = VmwareStudio(self._vmware_studio_host,
                                    self._vmware_studio_ssh_identity_key_file,
-                                   configuration_manager)
+                                   configuration_manager,
+                                   self._appliance_save_zip_file)
       vmware_studio.Validate()
 
       vmware_studio_template = VmwareStudioTemplate(
@@ -896,12 +920,13 @@ class Runner(object):
     vmware_studio_template.GenerateBuildProfile()
     vmware_studio.CopyTemplate(vmware_studio_template.final_studio_file_path)
     vmware_studio.BuildAppliance()
+    vmware_studio.CopyAppliance()
 
   def _ProcessOptions(self):
     """Process the command-line arguments and options."""
     options, arguments = self._option_parser.parse_args(self._arguments)
 
-    if len(arguments) != 7:
+    if len(arguments) != 8:
       self._option_parser.error('Incorrect arguments.')
 
     if '' in arguments or None in arguments:
@@ -911,7 +936,8 @@ class Runner(object):
                       'vmware_studio_ssh_identity_key_file',
                       'vmware_studio_template_file', 'yum_repository_host',
                       'yum_repository_ssh_identity_key_file',
-                      'secure_configuration_file', 'packages_directory']
+                      'secure_configuration_file', 'packages_directory',
+                      'appliance_save_zip_file']
     argument_names = [CreateStringFrom('_', name) for name in argument_names]
     argument_name_and_values = zip(argument_names, arguments)
 
