@@ -42,9 +42,9 @@ import time
 
 SLEEP_CHECK_INTERVAL = 1
 
-# TODO(mtp): Get build state and do not build it already building.
 # TODO(mtp): Constantize more strings.
 # TODO(mtp): Parameterize more aspects of operation.
+
 
 def CreateCommandFromItems(*command_pieces):
   """Create a command  for a shell interpreter from components.
@@ -446,8 +446,14 @@ class YumRepository(ServiceMediator):
       raise ValidationError('A simple rsync operation could not be run.',
                             throwable=e)
 
-  def CopyVendorPackages(self):
-    """Copies vendor packages onto the Yum repository."""
+  def CopyVendorPackages(self, remove_builder_repository):
+    """Copies vendor packages onto the Yum repository.
+
+    Args:
+      remove_builder_repository: A boolean whose value indicates indicates
+                                 whether the builder repository information
+                                 is to be removed post-build.
+    """
     logging.info('Copying vendor packages ...')
 
     # RPM file names do not always correspond to the actual package name.
@@ -547,6 +553,14 @@ class YumRepository(ServiceMediator):
     # to be removed when done.
     self._configuration_manager.configuration[key] = (
         repository_registration_command)
+    if remove_builder_repository:
+      key = 'APPLIANCE_PACKAGES_POST'
+      repository_unregistration_command_partial = CreateCommandFromItems(
+          'yum', '-yv', 'remove', 'abpr')
+      repository_unregistration_command = GenerateCommandOrFailDefinition(
+          repository_unregistration_command_partial)
+      self._configuration_manager.configuration[key] = (
+          repository_unregistration_command)
 
 
 class VmwareStudio(ServiceMediator):
@@ -556,6 +570,7 @@ class VmwareStudio(ServiceMediator):
   the result back to the target.
   """
   _BUILD_PROFILE_PATH = '/opt/vmware/var/lib/build/profiles'
+  _ACCEPTABLE_STATES = ['finished', 'failed']
   # TODO(mtp): Copy the build result back to the requester.
 
   def __init__(self, host_name, ssh_key_file,
@@ -587,7 +602,7 @@ class VmwareStudio(ServiceMediator):
           self._ssh_key_file))
 
     logging.info(('Checking whether the SSH identity file is valid '
-                  'and that remote commands may be executed on the Vmware '
+                  'and that remote commands may be executed on the VMware '
                   'Studio host.'))
     true_instance = self.RemoteInvoke('/bin/true')
     try:
@@ -595,6 +610,20 @@ class VmwareStudio(ServiceMediator):
     except SubprocessError, e:
       raise ValidationError('A simple SSH command could not be run.',
                             throwable=e)
+
+    logging.info('Checking build state ...')
+    studiocli_instance = self.RemoteInvoke('/opt/vmware/bin/studiocli',
+                                           '--buildstatus',
+                                           stdout=subprocess.PIPE)
+    studiocli_instance.Invoke()
+    for line in studiocli_instance.popen_instance.stdout:
+      if 'State:' in line:
+        state = line.split()[1].strip()
+        if state not in self._ACCEPTABLE_STATES:
+          message = CreateStringFrom('VMware Studio is busy;',
+                                     ' its state is "', state, '" right now.')
+          raise ValidationError(message)
+        break
 
   def CopyTemplate(self, template_path):
     """Copy the generated VMware Studio template to the VMware Studio."""
@@ -636,7 +665,8 @@ class ConfigurationManager(object):
                             'VMWARE_SERVER_USERNAME': 'root',
                             'VMWARE_SERVER_PASSWORD': None,
                             'APPLIANCE_PACKAGE_PREPARATION': '',
-                            'APPLIANCE_PACKAGES': []}
+                            'APPLIANCE_PACKAGES': [],
+                            'APPLIANCE_PACKAGES_POST': ''}
 
   def __init__(self, configuration_file):
     """Instantiate a Configuration manager.
@@ -734,10 +764,11 @@ class VmwareStudioTemplate(object):
 
     template_file_handle = open(self._studio_template_file)
     for line_number, line in enumerate(template_file_handle):
-      for template_key in configuration:
+      for template_key_basis in configuration:
+        template_key = CreateStringFrom('##', template_key_basis, '##')
         if template_key in line:
-          logging.debug('%i %s' % (line_number + 1, template_key))
-          not_found_keys.remove(template_key)
+          logging.debug('%i %s' % (line_number + 1, template_key_basis))
+          not_found_keys.remove(template_key_basis)
 
     if not_found_keys:
       message = 'The following keys are unaddressed by the template: %s' % (
@@ -776,8 +807,16 @@ class VmwareStudioTemplate(object):
     self.final_studio_file_path = destination_file
 
 
-def _SetupLogging():
-  logging.basicConfig(level=logging.INFO,
+def _SetupLogging(verbose):
+  """Configure the character of logging for the utility.
+
+  Args:
+    verbose: A boolean of whether the builder is to operate verbosely.
+  """
+  level = logging.INFO
+  if verbose:
+    level = logging.DEBUG
+  logging.basicConfig(level=level,
                       format='%(levelname)s :: %(message)s')
 
 
@@ -810,12 +849,20 @@ class Runner(object):
 
     self._option_parser.add_option('-v', '--verbose', action='store_true',
                                    dest='verbose')
+    self._option_parser.add_option('-r', '--remove-builder-repository',
+                                   action='store_false',
+                                   dest='remove_builder_repository',
+                                   help=('remove the builder repository from '
+                                         'the appliance after its creation'))
 
-    self._option_parser.set_defaults(verbose=False)
+    self._option_parser.set_defaults(verbose=False,
+                                     remove_builder_repository=True)
 
   def Run(self):
     """Start the whole build process."""
     self._ProcessOptions()
+
+    _SetupLogging(self._verbose)
 
     configuration_manager = None
     vmware_studio = None
@@ -845,7 +892,7 @@ class Runner(object):
       logging.error(validation_error)
       sys.exit(1)
 
-    yum_repository.CopyVendorPackages()
+    yum_repository.CopyVendorPackages(self._remove_builder_repository)
     vmware_studio_template.GenerateBuildProfile()
     vmware_studio.CopyTemplate(vmware_studio_template.final_studio_file_path)
     vmware_studio.BuildAppliance()
@@ -867,12 +914,15 @@ class Runner(object):
                       'secure_configuration_file', 'packages_directory']
     argument_names = [CreateStringFrom('_', name) for name in argument_names]
     argument_name_and_values = zip(argument_names, arguments)
+
     mappings = dict(argument_name_and_values)
     self.__dict__.update(mappings)
 
+    self._remove_builder_repository = options.remove_builder_repository
+    self._verbose = options.verbose
+
 
 def main(arguments):
-  _SetupLogging()
   runner = Runner(arguments)
   runner.Run()
 
