@@ -22,3 +22,25 @@ This build profile creates a semi-managed YUM repository server.
 Do note that this appliance may require 15 gigabytes of disk space once it is
 running. By default, it is small; but it has capacity to grow to house your
 packages.
+
+= hello-world.xml
+
+This basic build profile can be used for people once they've set up their
+build environment and want to ensure everything is operating sanely.
+
+= master-appliance-template.xml
+
+This is a basic build profile that end-users should copy, import into VMware
+Studio, modify, save, and run a diff against.
+
+Where you see differences that involve substitution macros enclosed in '##',
+reinsert them as such in their original locations.
+
+== Example methodology
+1.) cp master-appliance-template.xml my-new-appliance.xml
+2.) scp my-new-appliance.xml root@${VMWARE_STUDIO}:/opt/vmware/var/lib/build/profiles
+3.) Open https://${VMWARE_STUDIO}:5480, edit away, and save.
+4.) scp root@${VMWARE_STUDIO}:/opt/vmware/var/lib/build/profiles my-new-appliance-edited.xml
+5.) diff -u my-new-appliance.xml my-new-appliance-edited.xml | less
+6.) ${EDITOR} my-new-appliance-edited.xml 
+7.) Reinsert ## macros.
