@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ovf:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.dmtf.org/ovf/envelope/1 /opt/vmware/etc/build/schemas/vadk.xsd" xmlns:vadk="http://www.vmware.com/schema/vadk" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" ovf:version="0.7.0" vadk:version="0.81">
+	<References/>
+<!--
+        The Annotation element of the AnnotationSection_Type is the text
+        that will be presented as the Description of the appliance.
+    -->
+	<Section xsi:type="ovf:AnnotationSection_Type">
+		<Info/>
+		<Annotation>Example Template for Google VM Deployment
+
+$Id$</Annotation>
+	</Section>
+	<Section xsi:type="ovf:ProductSection_Type" ovf:required="false">
+		<Info>Appliance ISV branding information</Info>
+		<Product>Your Appliance Title Here</Product>
+		<Vendor>Independent Software Vendor, Inc.</Vendor>
+<!--
+            Version is the actual product version in the
+            form X.X.X.X where X is an unsigned 16-bit integer.
+
+            FullVersion is a descriptive version string
+            including, for example, alpha or beta designations
+            and other release criteria.
+        -->
+		<Version>1.0.0.0</Version>
+		<FullVersion>1.0.0.0 alpha</FullVersion>
+		<VendorUrl>http://www.isv.com</VendorUrl>
+		<AppUrl></AppUrl>
+	</Section>
+	<Section xsi:type="vadk:ExtendedProductSection_Type">
+		<Info/>
+		<vadk:VendorUUID/>
+		<vadk:ProductRID/>
+		<vadk:AppUrlName>Application Home</vadk:AppUrlName>
+		<vadk:Logo></vadk:Logo>
+		<vadk:LogoUrl></vadk:LogoUrl>
+		<vadk:WelcomeText></vadk:WelcomeText>
+	</Section>
+	<Section xsi:type="ovf:EulaSection_Type" xml:lang="en">
+		<Info>End User License Agreement</Info>
+		<License>This is a sample End User License Agreement. Note that this is not simply a pointer to a EULA file on the local system for installation into the appliance, it is the actual EULA itself.</License>
+	</Section>
+	<Section xsi:type="vadk:SSLCertificateSection_Type">
+		<Info/>
+		<vadk:CommonName>Self-Signed by YourCompany, Inc.</vadk:CommonName>
+		<vadk:OrganizationName>YourCompany, Inc.</vadk:OrganizationName>
+		<vadk:OrganizationalUnitName>Appliance Division</vadk:OrganizationalUnitName>
+		<vadk:CountryName>US</vadk:CountryName>
+	</Section>
+	<Section xsi:type="vadk:ApplicationSection_Type">
+		<Info/>
+		<vadk:VMXFilename>Appliance.vmx</vadk:VMXFilename>
+		<vadk:DistributionFormat vadk:format="zip" vadk:filename="Appliance" vadk:directory="appliance"/>
+		<vadk:ApplicationPackages>
+			<vadk:url>http://[VADK.localIP]/ISV/appliancePackages</vadk:url>
+		</vadk:ApplicationPackages>
+		<vadk:OSPackages><!-- Additional OS packages needed by the ISV's application --><!-- <vadk:Package vadk:name="foo"/> --></vadk:OSPackages>
+		<vadk:BootActions>
+			<vadk:FirstBoot>echo This is script is executed on first boot only.</vadk:FirstBoot>
+			<vadk:SubsequentBoot>echo This script is executed on all boots, except the first one.</vadk:SubsequentBoot>
+		</vadk:BootActions>
+		<vadk:Users>
+			<vadk:User vadk:username="root" vadk:password="##APPLIANCE_ROOT_PASSWORD##" vadk:passwordFormat="base64" vadk:fullname="" vadk:uid=""/>
+		</vadk:Users>
+	</Section>
+	<Section xsi:type="vadk:UpdateSection_Type">
+		<Info/>
+		<vadk:Repository vadk:url="root" vadk:username="##APPLIANCE_ROOT_PASSWORD##" vadk:password="" vadk:passwordFormat="base64"/>
+<!--
+        <vadk:RepositoryStagingServer vadk:hostname=""
+            vadk:fileLogin="root" vadk:filePassword=""
+            vadk:filePasswordFormat="plaintext" vadk:fileProto="scp"
+            vadk:filePath="/tmp"/>
+-->
+		<vadk:Info></vadk:Info>
+<!--
+        <vadk:RepositoryExport vadk:format="zip"
+            vadk:filename="VADK_Update"/>
+-->
+		<vadk:PreInstallShellScript/>
+		<vadk:PostInstallShellScript/>
+	</Section>
+<!-- Defined by  CIM_OperatingSystem.OsType -->
+	<Section ovf:id="88" xsi:type="ovf:OperatingSystemSection_Type">
+		<Info>Guest Operating System</Info>
+		<Description>CentOS Linux 5.0</Description>
+	</Section>
+	<Section xsi:type="ovf:VirtualHardwareSection_Type">
+		<Info>Virtual Hardware Requirements</Info>
+		<System>
+			<vssd:VirtualSystemType>vmx-4</vssd:VirtualSystemType>
+		</System>
+		<Item>
+			<rasd:Caption>1 virtual CPU</rasd:Caption>
+			<rasd:Description>Number of virtual CPUs</rasd:Description>
+			<rasd:InstanceId>1</rasd:InstanceId>
+			<rasd:ResourceType>3</rasd:ResourceType>
+			<rasd:VirtualQuantity>1</rasd:VirtualQuantity>
+		</Item>
+		<Item>
+			<rasd:AllocationUnits>MegaBytes</rasd:AllocationUnits>
+			<rasd:Caption>256 MB of memory</rasd:Caption>
+			<rasd:Description>Memory Size</rasd:Description>
+			<rasd:InstanceId>2</rasd:InstanceId>
+			<rasd:ResourceType>4</rasd:ResourceType>
+			<rasd:VirtualQuantity>256</rasd:VirtualQuantity>
+		</Item>
+		<Item>
+			<rasd:BusNumber>0</rasd:BusNumber>
+			<rasd:Caption>SCSI Controller 0 - LSI Logic</rasd:Caption>
+			<rasd:InstanceId>3</rasd:InstanceId>
+			<rasd:ResourceSubType>lsilogic</rasd:ResourceSubType>
+			<rasd:ResourceType>6</rasd:ResourceType>
+		</Item>
+		<Item>
+			<rasd:AddressOnParent>0</rasd:AddressOnParent>
+			<rasd:Caption>Harddisk 0</rasd:Caption>
+			<rasd:HostResource>/disk/system</rasd:HostResource>
+			<rasd:InstanceId>4</rasd:InstanceId>
+			<rasd:Parent>3</rasd:Parent>
+			<rasd:ResourceType>17</rasd:ResourceType>
+		</Item>
+		<Item>
+			<rasd:AddressOnParent>1</rasd:AddressOnParent>
+			<rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
+			<rasd:Caption>Ethernet adapter on &quot;Network 1&quot;</rasd:Caption>
+			<rasd:Connection>Network 1</rasd:Connection>
+			<rasd:InstanceId>5</rasd:InstanceId>
+			<rasd:ResourceSubType>PCNet32</rasd:ResourceSubType>
+			<rasd:ResourceType>10</rasd:ResourceType>
+		</Item>
+	</Section>
+	<Section xsi:type="vadk:JEOSSection_Type">
+		<Info/>
+		<vadk:BootArgs>
+append ks=[VADK.unattendedCfgURL] ksdevice=eth0
+method=http://[VADK.localIP]/build/[VADK.buildID]/
+initrd=initrd.img
+ip=[VADK.ip] netmask=[VADK.nm] gateway=[VADK.gw] dns=[VADK.ns1]
+lang=en_US keymap=us ramdisk_size=100000
+        </vadk:BootArgs>
+		<vadk:BootArgsDHCP>
+append ks=[VADK.unattendedCfgURL] 
+ksdevice=eth0 ip=dhcp
+method=http://[VADK.localIP]/build/[VADK.buildID]/
+initrd=initrd.img
+lang=en_US keymap=us ramdisk_size=100000
+        </vadk:BootArgsDHCP>
+		<vadk:BootFiles vadk:relPath="images/pxeboot" vadk:kernel="vmlinuz"/>
+		<vadk:UnattendedInstallTemplate>
+            [VADK.vadkRoot]/etc/build/templates/redhat/5/redhat5.xsl
+        </vadk:UnattendedInstallTemplate>
+		<vadk:VADKPackages vadk:path="http://[VADK.localIP]/build/[VADK.buildID]/repo/vadkPackages/" vadk:sourceDir="[VADK.vadkRoot]/lib/build/include/centos/5/2/" vadk:targetDir="[VADK.stageDir]/repo/vadkPackages/"/>
+		<vadk:ISO vadk:path="file:///opt/vmware/www/ISV/ISO/CentOS-5.2-i386-bin-DVD.iso" vadk:md5sum="1539bad48e984ae1441052dc074c0995"/>
+		<vadk:Distribution vadk:vendor="CentOS" vadk:OSverMajor="5" vadk:OSverMinor="2" vadk:arch="i386" vadk:smp="1" vadk:packageFormat="rpm" vadk:packageManager="yum" vadk:packageRepoDir="packageRepoDir"/>
+		<vadk:OSPackages>
+			<vadk:Package vadk:name="bash"/>
+			<vadk:Package vadk:name="bind-utils"/>
+			<vadk:Package vadk:name="boost"/>
+			<vadk:Package vadk:name="chkconfig"/>
+			<vadk:Package vadk:name="coreutils"/>
+			<vadk:Package vadk:name="createrepo"/>
+			<vadk:Package vadk:name="curl"/>
+			<vadk:Package vadk:name="dhclient"/>
+			<vadk:Package vadk:name="gawk"/>
+			<vadk:Package vadk:name="grep"/>
+			<vadk:Package vadk:name="initscripts"/>
+			<vadk:Package vadk:name="iptables"/>
+			<vadk:Package vadk:name="libicu"/>
+			<vadk:Package vadk:name="logrotate"/>
+			<vadk:Package vadk:name="mod_ssl"/>
+			<vadk:Package vadk:name="module-init-tools"/>
+			<vadk:Package vadk:name="ncurses"/>
+			<vadk:Package vadk:name="net-tools"/>
+			<vadk:Package vadk:name="openssh-server"/>
+			<vadk:Package vadk:name="openssl"/>
+			<vadk:Package vadk:name="passwd"/>
+			<vadk:Package vadk:name="rpm"/>
+			<vadk:Package vadk:name="procps"/>
+			<vadk:Package vadk:name="sed"/>
+			<vadk:Package vadk:name="sudo"/>
+			<vadk:Package vadk:name="sysklogd"/>
+			<vadk:Package vadk:name="system-config-date"/>
+			<vadk:Package vadk:name="SysVinit"/>
+			<vadk:Package vadk:name="util-linux"/>
+			<vadk:Package vadk:name="wget"/>
+			<vadk:Package vadk:name="which"/>
+			<vadk:Package vadk:name="yum"/>
+		</vadk:OSPackages>
+	</Section>
+	<Section xsi:type="vadk:BuildSection_Type">
+		<Info/>
+		<vadk:ProvisioningSettings><!-- OS settings for the appliance being provisioned -->
+			<vadk:NetworkMode>bridged</vadk:NetworkMode>
+			<vadk:NetworkType>dhcp</vadk:NetworkType>
+			<vadk:IP></vadk:IP>
+			<vadk:Netmask></vadk:Netmask>
+			<vadk:Gateway></vadk:Gateway>
+			<vadk:DNS1></vadk:DNS1>
+			<vadk:DNS2></vadk:DNS2>
+		</vadk:ProvisioningSettings>
+<!--
+        vadk:path maps to the Upload Path field in the web UI. This is a local directory path on the 
+        physical box where the VMware Server is running. This location will be used to store 
+        the provisioning virtual machine for building the appliance.
+
+        vadk:filePath maps to the Registration Path field in the web UI. This is a path used by 
+        VMware Studio for uploading the provisioning virtual machine to the Upload Path mentioned above.
+
+        The Registration Path and the Upload Path above must refer to same physical directory. 
+        -->
+		<vadk:ProvisioningEngine>
+			<vadk:VmhostLan vadk:hostname="##VMWARE_SERVER_HOST##" vadk:port="##VMWARE_SERVER_PORT##" vadk:login="##VMWARE_SERVER_USERNAME##" vadk:password="##VMWARE_SERVER_PASSWORD##" vadk:passwordFormat="base64" vadk:path="/tmp" vadk:fileLogin="##VMWARE_SERVER_USERNAME##" vadk:filePassword="##VMWARE_SERVER_PASSWORD##" vadk:filePasswordFormat="base64" vadk:fileProto="scp" vadk:filePath="/tmp"/>
+			<vadk:VmhostProduct vadk:name="Server" vadk:majorVersion="1"/>
+		</vadk:ProvisioningEngine>
+<!-- all timeouts are in seconds    -->
+		<vadk:ProvisioningTimeouts vadk:pxe="600" vadk:poweroff="25" vadk:hang="7200"/>
+		<vadk:IsoCache>[VADK.vadkRoot]/cache/build/ISO</vadk:IsoCache>
+		<vadk:IsoCache>/mnt/ISO</vadk:IsoCache>
+		<vadk:PreInstallShellScript>echo &quot;pre-install shell code&quot;</vadk:PreInstallShellScript>
+		<vadk:PostInstallShellScript>##APPLIANCE_PACKAGE_PREPARATION##
+##APPLIANCE_PACKAGES##
+##APPLIANCE_PACKAGES_POST##
+echo &quot;post-install shell code&quot;</vadk:PostInstallShellScript>
+	</Section>
+<!--
+        The combination of a network device in ovf:VirtualHardwareSection_Type
+        an entry in ovf:NetworkSection_Type describe a network.
+    -->
+	<Section xsi:type="ovf:NetworkSection_Type">
+		<Info>List of logical networks used in the package</Info>
+		<Network ovf:name="Network 1">
+			<Description>The &quot;Network 1&quot; network</Description>
+		</Network>
+	</Section>
+<!--
+        The combination of a disk device in ovf:VirtualHardwareSection_Type,
+        an entry in ovf:DiskSection_Type, and optionally entries in
+        vadk:DiskPartitionSection_Type describe a disk, referenced by ovf:diskId
+    -->
+	<Section xsi:type="ovf:DiskSection_Type">
+		<Info>List of the virtual disks and partitions needed</Info>
+		<Disk ovf:diskId="system" ovf:capacity="2048" ovf:capacityAllocationUnits="MegaBytes" ovf:format="http://www.vmware.com/specifications/vmdk.html#sparse" ovf:fileRef="system.vmdk"/>
+	</Section>
+	<Section xsi:type="vadk:DiskPartitionSection_Type">
+		<Info/>
+		<vadk:Partition vadk:diskId="system" vadk:size="128" vadk:mount="/boot" vadk:fs="ext3" vadk:bootable="1"/>
+		<vadk:Partition vadk:diskId="system" vadk:size="grow" vadk:mount="/" vadk:fs="ext3" vadk:bootable="0"/>
+		<vadk:Partition vadk:diskId="system" vadk:size="128" vadk:mount="" vadk:fs="swap" vadk:bootable="0"/>
+	</Section>
+<!--
+        Unknown OVF elements in this file will be passed directly
+        to the OVF output descriptor without interpretation
+    -->
+</ovf:Envelope>
