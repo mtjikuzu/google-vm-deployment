@@ -1,0 +1,40 @@
+VMware Studio auto-builder framework for Apache Ant.
+Copyright (C) 2008  Matt T. Proud (matt.proud@gmail.com)
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
+USA.
+
+$Id$
+
+To use the appliance builder task in your Ant rules, please embed a target
+similar to what follows:
+
+<project name="something" basedir="." default="appliance">
+
+  <taskdef resource="ApplianceBuilderTask.properties"
+           classpath="ApplianceBuilderTask-20081119.jar"/>
+
+  <target name="appliance">
+    <appliancebuilder vmwareStudioHost="vmwarestudio.fqdn"
+                      applianceBuilderUtility="./appliance_builder_client.py"
+                      vmwareStudioSshIdentityKeyFile="vmware-studio.key"
+                      vmwareStudioTemplateFile="appliance-profile.xml"
+                      yumRepositoryHost="yumrepository.fqdn"
+                      yumRepositorySshIdentityKeyFile="yum.key"
+                      secureConfigurationFile="secure/secure_configuration.py"
+                      packagesDirectory="dist/rpms"
+                      applianceSaveZipFile="dist/appliance.zip"/>
+
+  </target>
+</project>
