@@ -20,10 +20,7 @@
 
 # $Id$
 
-"""Build an appliance from a set of specifications.
-
-A detailed description of appliance_builder.
-"""
+"""Build a VMware Studio appliance from a set of specifications."""
 
 __author__ = 'matt.proud@gmail.com (Matt Proud)'
 __version__ = '$Revision$'
@@ -41,13 +38,82 @@ import time
 import urllib
 
 
+_KEEP_BUILDER_REPOSITORY = False
+_OS_BASE_VERSION_BRANCH = '5'
+_REPOSITORY_METADATA_REGENERATOR = '/usr/sbin/regenerate_repository.sh'
+_RSYNC_PATH = '/usr/bin/rsync'
+_RSYNC_TRANSFER_OPTIONS = '-rltzvc'
 _SLEEP_CHECK_INTERVAL = 1
+_SSH_PATH = '/usr/bin/ssh'
+_VERBOSE = False
+_YUM_REPOSITORY_SUBDIRECTORY = 'repository'
+_YUM_WEBROOT = '/var/www/html'
 
-# TODO(mtp): Constantize more strings.
-# TODO(mtp): Parameterize more aspects of operation.
-# TODO(mtp): Use urllib for URL joining.
-# TODO(mtp): Use optparser's option groups for merging logical groups.
-# TODO(mtp): Make initializers' method signatures sane.
+# TODO(mtp): Use the appropriate XML module in Python instead of using template
+#            macros. Research shows that XPath support is pathetic in Python.
+
+
+def StripLeadingSlashes(string):
+  """Ensure the string does not start with a slash.
+
+  Args:
+    string: A string to process.
+
+  Returns:
+    The original string if it did not start with a slash or a new one with
+    the slash removed.
+  """
+  if string.startswith('/'):
+    return string[1:]
+  else:
+    return string
+
+
+def SafePathJoin(*components):
+  """Join together path components regardless of what is provided.
+
+  os.path.join has some peculiarities with respect to how it handles slashes,
+  and these might cause some unexpected internal behaviors when mixed with some
+  UNIX shell tab completion behaviors.
+
+  This method attempts to remedy these.
+
+  Args:
+    components: A sequence of strings that shall be joined together according
+                to the platform path specification.
+
+  Returns:
+    A string of the joined path.
+  """
+  car = components[0]
+  cdr = components[1:]
+  cleaned = [StripLeadingSlashes(item) for item in cdr]
+  return os.path.join(car, *cleaned)
+
+
+def SafeUrlJoin(*components):
+  """Join fragments together to form a URL.
+
+  Arguments:
+    components: A sequence of strings that shall be joined together to form a
+                complete URL.
+
+  Returns:
+    A string of the final URL.
+  """
+  car = components[0]
+  cdr = components[1:]
+  if len(components) == 2:
+    return urllib.basejoin(car, cdr[0])
+  else:
+    second_car = cdr[0]
+    if second_car.startswith('/'):
+      second_car = second_car[1:]
+    result = urllib.basejoin(car, second_car)
+    if not result.endswith('/'):
+      result = CreateStringFrom(result, '/')
+    return SafeUrlJoin(result, *cdr[1:])
+
 
 def CreateCommandFromItems(*command_pieces):
   """Create a command  for a shell interpreter from components.
@@ -296,7 +362,7 @@ class BoundedSubprocess(object):
       ReturnValueError: If the process returns an unexpected return value.
       TimeoutError: If the process runs longer than expected.
 
-      """
+    """
     logging.debug('Invoking %s ...' % (
         CreateCommandFromItems(self.command_and_arguments)))
     self._start_time = time.time()
@@ -341,7 +407,7 @@ class ServiceMediator(object):
   """
   _SSH_KEYFILE_ARGUMENT = '-i'
 
-  def __init__(self, host_name, ssh_key_file, ssh_path, user='root'):
+  def __init__(self, host_name, ssh_key_file, ssh_path, user):
     """Instantiate a ServiceMediator.
 
     Args:
@@ -350,7 +416,7 @@ class ServiceMediator(object):
       ssh_key_file: A string of the fully-qualified file path of the SSH
                     private key.
       ssh_path: A string of the fully-qualified path of the SSH program.
-      user: An optional string of the username of the user who shall
+      user: An string of the username of the user who shall
             authenticate with the remote host.
     """
     self._host_name = host_name
@@ -402,10 +468,18 @@ class YumRepository(ServiceMediator):
   It performs such tasks as pushing files to the Yum server, regenerating
   repository metadata, and normalizing permissions.
   """
+  _CHMOD_PATH = '/bin/chmod'
+  _CP_OPTIONS = '-fpv'
+  _CP_PATH = '/bin/cp'
+  _RPM_PATH = '/bin/rpm'
+  _RPM_QUERY_FORMAT = '"%{NAME} %{ARCH} %{VERSION}"'
+  _SRPM_ARCH_SIGNATURE = 'src'
+  _SRPM_DESTINATION = 'SRPMS'
 
   def __init__(self, host_name, ssh_key_file, ssh_path, packages_source,
                webroot, repository_subdirectory, os_version_branch,
-               configuration_manager, user='root'):
+               configuration_manager, rsync_path, user,
+               metadata_regenerator):
     """Instantiate a YumRepository.
 
     Args:
@@ -421,17 +495,25 @@ class YumRepository(ServiceMediator):
                                webroot where the repository is located.
       os_version_branch: A string of the CentOS release branch.
       configuration_manager: An instance of ConfigurationManager.
-      user: An optional string of the username of the user who shall
+      rsync_path: A string of the path to the rsync executable.
+      user: An string of the username of the user who shall
             authenticate with the remote host.
+      metadata_regenerator: A string of the path to the utility on the Yum
+                            repository that will regenerate metadata on
+                            completion.
     """
-    ServiceMediator.__init__(self, host_name, ssh_key_file, ssh_path, user=user)
+    ServiceMediator.__init__(self, host_name=host_name,
+                             ssh_key_file=ssh_key_file, ssh_path=ssh_path,
+                             user=user)
     self._packages_source = packages_source
     self._configuration_manager = configuration_manager
-    self._packages_base_destination = os.path.join(webroot,
+    self._packages_base_destination = SafePathJoin(webroot,
                                                    repository_subdirectory,
                                                    os_version_branch)
-    self._http_location = os.path.join(repository_subdirectory,
+    self._http_location = SafePathJoin(repository_subdirectory,
                                        os_version_branch)
+    self._rsync_path = rsync_path
+    self._metadata_regenerator = metadata_regenerator
 
   def Validate(self):
     """Determine whether the operating environment is sufficient to work.
@@ -445,7 +527,7 @@ class YumRepository(ServiceMediator):
       raise ValidationError('The vendor packages directory does not exist.')
 
     logging.info('Validating whether RPMs exist ...')
-    rpms = glob.glob(os.path.join(self._packages_source, '*.rpm'))
+    rpms = glob.glob(SafePathJoin(self._packages_source, '*.rpm'))
     if not rpms:
       raise ValidationError('No RPM files were found ...')
 
@@ -453,7 +535,7 @@ class YumRepository(ServiceMediator):
     # Notes(mtp): os.path.join is insufficient here.
     rsync_path_spec = CreateStringFrom(self._DeriveHostSpec(), ':',
                                        self._packages_base_destination, '/')
-    rsync_instance = BoundedSubprocess('/usr/bin/rsync', '-e',
+    rsync_instance = BoundedSubprocess(self._rsync_path, '-e',
                                        'ssh -i %s' % self._ssh_key_file,
                                        rsync_path_spec)
     try:
@@ -462,11 +544,11 @@ class YumRepository(ServiceMediator):
       raise ValidationError('A simple rsync operation could not be run.',
                             throwable=e)
 
-  def CopyVendorPackages(self, remove_builder_repository):
+  def CopyVendorPackages(self, keep_builder_repository):
     """Copies vendor packages onto the Yum repository.
 
     Args:
-      remove_builder_repository: A boolean whose value indicates indicates
+      keep_builder_repository: A boolean whose value indicates indicates
                                  whether the builder repository information
                                  is to be removed post-build.
     """
@@ -482,21 +564,22 @@ class YumRepository(ServiceMediator):
         self._configuration_manager.configuration['APPLIANCE_PACKAGES'])
 
     # Operating on vendor RPM files.
-    for rpm in glob.glob(os.path.join(self._packages_source, '*.rpm')):
+    for rpm in glob.glob(SafePathJoin(self._packages_source, '*.rpm')):
       logging.info('Copying %s ...' % rpm)
 
       rpm_basename = os.path.basename(rpm)
       # RPMs are temporarily copied to the /tmp directory, where
       # bits of metadata are extracted from them that will ultimately determine
       # their final destination.
-      remote_temporary_destination = os.path.join('/tmp', rpm_basename)
+      remote_temporary_destination = SafePathJoin('/tmp', rpm_basename)
       # rsync is used for speed reasons, because it can verify checksums,
       # and only copy the files if absolutely necessary.
       # The main reason that recopying the same file is required is that
       # housecleaning services reap the contents of temporary directories
       # periodically.
       rsync_instance = BoundedSubprocess(
-          '/usr/bin/rsync', '-rltzvc', '-e', 'ssh -i %s' % self._ssh_key_file,
+          self._rsync_path, _RSYNC_TRANSFER_OPTIONS, '-e',
+          'ssh -i %s' % self._ssh_key_file,
           rpm, '%s:%s' % (self._DeriveHostSpec(), remote_temporary_destination),
           retry=3, timeout=300)
       rsync_instance.Invoke()
@@ -507,9 +590,9 @@ class YumRepository(ServiceMediator):
       # yum repository and rpm on that to get several bits of metadata.
       # This is also because not all vendors can be expected to have
       # a Python module that interacts with RPM files directly.
-      rpm_instance = self.RemoteInvoke('/bin/rpm', '-q',
+      rpm_instance = self.RemoteInvoke(self._RPM_PATH, '-q',
                                        '--queryformat',
-                                       '"%{NAME} %{ARCH} %{VERSION}"',
+                                       self._RPM_QUERY_FORMAT,
                                        '-p', remote_temporary_destination)
       rpm_instance.Invoke()
 
@@ -518,13 +601,13 @@ class YumRepository(ServiceMediator):
 
       # ARCH field for SRPMS appears incorrectly, so we will try to guess based
       # upon the file name.
-      if rpm_basename.split('.')[-2] == 'src':
-        architecture = 'SRPMS'
+      if rpm_basename.split('.')[-2] == self._SRPM_ARCH_SIGNATURE:
+        architecture = self._SRPM_DESTINATION
 
       logging.info('Moving package to its final location ...')
-      remote_final_destination = os.path.join(self._packages_base_destination,
+      remote_final_destination = SafePathJoin(self._packages_base_destination,
                                               architecture)
-      cp_instance = self.RemoteInvoke('/bin/cp', '-fpv',
+      cp_instance = self.RemoteInvoke(self._CP_PATH, self._CP_OPTIONS,
                                       remote_temporary_destination,
                                       remote_final_destination)
       cp_instance.Invoke()
@@ -544,32 +627,32 @@ class YumRepository(ServiceMediator):
     self._configuration_manager.configuration['APPLIANCE_PACKAGES'] = commands
 
     logging.info('Normalizing permissions ...')
-    chmod_instance = self.RemoteInvoke('/bin/chmod', '-R', 'a+r',
+    chmod_instance = self.RemoteInvoke(self._CHMOD_PATH, '-R', 'a+r',
                                        self._packages_base_destination)
     chmod_instance.Invoke()
 
-    chmod_instance = self.RemoteInvoke('/bin/chmod', 'a+x',
+    chmod_instance = self.RemoteInvoke(self._CHMOD_PATH, 'a+x',
                                        self._packages_base_destination)
     chmod_instance.Invoke()
 
     logging.info('Regenerating repository meta data ...')
     repository_regenerator = self.RemoteInvoke(
-        '/usr/sbin/regenerate_repository.sh', retry=3, timeout=300)
+        self._metadata_regenerator, retry=3, timeout=300)
     repository_regenerator.Invoke()
 
-    repository_package_url = CreateStringFrom(
-        'http://', self._host_name, self._http_location, '/', 'noarch',
-        '/', 'abpr-latest.rpm')
+    repository_package_url = SafeUrlJoin(
+        CreateStringFrom('http://', self._host_name),
+        self._http_location,
+        'noarch',
+        'abpr-latest.rpm')
     repository_registration_command_partial = CreateCommandFromItems(
         'rpm', '-Uvh', repository_package_url)
     repository_registration_command = GenerateCommandOrFailDefinition(
         repository_registration_command_partial)
     key = 'APPLIANCE_PACKAGE_PREPARATION'
-    # TODO(mtp): Add a conditional to allow the repository registration package
-    # to be removed when done.
     self._configuration_manager.configuration[key] = (
         repository_registration_command)
-    if remove_builder_repository:
+    if keep_builder_repository:
       key = 'APPLIANCE_PACKAGES_POST'
       repository_unregistration_command_partial = CreateCommandFromItems(
           'yum', '-yv', 'remove', 'abpr')
@@ -587,11 +670,10 @@ class VmwareStudio(ServiceMediator):
   """
   _BUILD_PROFILE_PATH = '/opt/vmware/var/lib/build/profiles'
   _ACCEPTABLE_STATES = ['finished', 'failed']
-  # TODO(mtp): Copy the build result back to the requester.
 
   def __init__(self, host_name, ssh_key_file, ssh_path,
                configuration_manager, appliance_zip_file_save_path,
-               user='root'):
+               user, rsync_path):
     """Instantiate a VmwareStudio.
 
     Args:
@@ -603,12 +685,16 @@ class VmwareStudio(ServiceMediator):
       configuration_manager: An instance of ConfigurationManager.
       appliance_zip_file_save_path: A string of the fully-qualified path to
                                     where the appliance will be saved.
-      user: An optional string of the username of the user who shall
+      user: An string of the username of the user who shall
             authenticate with the remote host.
+      rsync_path: A string of the path to the rsync utility.
     """
-    ServiceMediator.__init__(self, host_name, ssh_key_file, ssh_path, user=user)
+    ServiceMediator.__init__(self, host_name=host_name,
+                             ssh_key_file=ssh_key_file,
+                             ssh_path=ssh_path, user=user)
     self._configuration_manager = configuration_manager
     self._appliance_zip_file_save_path = appliance_zip_file_save_path
+    self._rsync_path = rsync_path
 
   def Validate(self):
     """Determine whether the operating environment is sufficient to work.
@@ -651,13 +737,14 @@ class VmwareStudio(ServiceMediator):
     logging.info('Copying template ...')
 
     rsync_instance = BoundedSubprocess(
-        '/usr/bin/rsync', '-rltzvc', '-e', 'ssh -i %s' % self._ssh_key_file,
+        self._rsync_path, _RSYNC_TRANSFER_OPTIONS, '-e',
+        'ssh -i %s' % self._ssh_key_file,
         template_path, '%s:%s' % (self._DeriveHostSpec(),
                                   self._BUILD_PROFILE_PATH),
         retry=3, timeout=300)
     rsync_instance.Invoke()
     # TODO(mtp): Refactor out this nastiness.
-    self._build_profile_path = os.path.join(self._BUILD_PROFILE_PATH,
+    self._build_profile_path = SafePathJoin(self._BUILD_PROFILE_PATH,
                                             os.path.basename(template_path))
 
   def BuildAppliance(self):
@@ -719,8 +806,14 @@ class ConfigurationManager(object):
     """
     new_configuration = dict(self._DEFAULT_SUBSTITUTIONS)
 
+
+    module_directory = os.path.dirname(configuration_file)
+    sys.path.append(module_directory)
+
+    module_name = None
+
     if configuration_file.endswith('.py'):
-      configuration_file = configuration_file[:-3]
+      module_name = os.path.basename(configuration_file)[:-3]
     else:
       message = ('The configuration file must end in .py, be in the '
                  'local directory, follow Python dictionary standards, and the '
@@ -729,7 +822,7 @@ class ConfigurationManager(object):
       raise ValueError(message)
 
     try:
-      configuration_module = __import__(configuration_file)
+      configuration_module = __import__(module_name)
     except ImportError:
       raise RuntimeError('%s could not be imported.' % configuration_file)
 
@@ -830,7 +923,7 @@ class VmwareStudioTemplate(object):
       # tempfile module.
       self._generated_studio_file.file.flush()
 
-    destination_file = os.path.join(
+    destination_file = SafePathJoin(
         '/tmp', os.path.basename(self._studio_template_file))
 
     try:
@@ -886,37 +979,59 @@ class Runner(object):
 
     self._option_parser = optparse.OptionParser(usage=usage, version=version)
 
-    self._option_parser.add_option('-v', '--verbose', action='store_true',
-                                   dest='verbose')
-    self._option_parser.add_option('-r', '--remove-builder-repository',
-                                   action='store_false',
-                                   dest='remove_builder_repository',
-                                   help=('remove the builder repository from '
-                                         'the appliance after its creation'))
-    self._option_parser.add_option('-s', '--ssh-path', action='store',
-                                   dest='ssh_path', help=(
-                                       'the path to the SSH command'))
-    self._option_parser.add_option('-y', '--yum-webroot',
-                                   action='store',
-                                   dest='yum_webroot',
-                                   help=('the base webroot location on the '
-                                         'Yum repository'))
-    self._option_parser.add_option('-u', '--yum-repository-subdirectory',
-                                   action='store',
-                                   dest='yum_repository_subdirectory',
-                                   help=('the subdirectory of the webroot '
-                                         'where packages are to be stored.'))
-    self._option_parser.add_option('-o', '--os-base-version-branch',
-                                   action='store',
-                                   dest='os_base_version_branch',
-                                   help=('the base version of the CentOS'))
-    
-    self._option_parser.set_defaults(verbose=False,
-                                     remove_builder_repository=True,
-                                     ssh_path='/usr/bin/ssh',
-                                     yum_webroot='/var/www/html',
-                                     yum_repository_subdirectory='repository',
-                                     os_base_version_branch='5')
+    general_options = optparse.OptionGroup(
+        self._option_parser,
+        'General',
+        description='Options Applicable to Everything')
+    general_options.add_option('-v', '--verbose', action='store_true',
+                               dest='verbose')
+    self._option_parser.add_option_group(general_options)
+
+    one_off_options = optparse.OptionGroup(
+        self._option_parser,
+        'One-Off Options',
+        description='EXPERTS ONLY :: Used in Unusual Circumstances')
+    one_off_options.add_option('-k', '--keep-builder-repository',
+                               action='store_true',
+                               dest='keep_builder_repository',
+                               help=('keep the builder repository on '
+                                     'the appliance after its creation'))
+    one_off_options.add_option('-s', '--ssh-path', action='store',
+                               dest='ssh_path',
+                               help='the path to the SSH command')
+    one_off_options.add_option('-y', '--yum-webroot',
+                               action='store',
+                               dest='yum_webroot',
+                               help=('the base webroot location on the '
+                                     'Yum repository'))
+    one_off_options.add_option('-u', '--yum-repository-subdirectory',
+                               action='store',
+                               dest='yum_repository_subdirectory',
+                               help=('the subdirectory of the webroot '
+                                     'where packages are to be stored.'))
+    one_off_options.add_option('-o', '--os-base-version-branch',
+                               action='store',
+                               dest='os_base_version_branch',
+                               help=('the base version of the CentOS'))
+    one_off_options.add_option('-n', '--rsync-path', action='store',
+                               dest='rsync_path',
+                               help='the path the rsync executable')
+    one_off_options.add_option('-g', '--yum-repository-metadata-regenerator',
+                               dest='yum_repository_metadata_regenerator',
+                               help=('the full path to the utility on the Yum '
+                                     'repository that will regenerate '
+                                     'metadata on completion.'))
+    self._option_parser.add_option_group(one_off_options)
+
+    self._option_parser.set_defaults(
+        verbose=_VERBOSE,
+        keep_builder_repository=_KEEP_BUILDER_REPOSITORY,
+        ssh_path=_SSH_PATH,
+        yum_webroot=_YUM_WEBROOT,
+        yum_repository_subdirectory=_YUM_REPOSITORY_SUBDIRECTORY,
+        os_base_version_branch=_OS_BASE_VERSION_BRANCH,
+        rsync_path=_RSYNC_PATH,
+        yum_repository_metadata_regenerator=_REPOSITORY_METADATA_REGENERATOR)
 
   def Run(self):
     """Start the whole build process."""
@@ -934,31 +1049,38 @@ class Runner(object):
           self._secure_configuration_file)
       configuration_manager.Validate()
 
-      vmware_studio = VmwareStudio(self._vmware_studio_host,
-                                   self._vmware_studio_ssh_identity_key_file,
-                                   self._ssh_path,
-                                   configuration_manager,
-                                   self._appliance_save_zip_file)
+      vmware_studio = VmwareStudio(
+          host_name=self._vmware_studio_host,
+          ssh_key_file=self._vmware_studio_ssh_identity_key_file,
+          ssh_path=self._ssh_path,
+          configuration_manager=configuration_manager,
+          appliance_zip_file_save_path=self._appliance_save_zip_file,
+          rsync_path=self._rsync_path,
+          user='root')
       vmware_studio.Validate()
 
       vmware_studio_template = VmwareStudioTemplate(
           self._vmware_studio_template_file,
           configuration_manager)
       vmware_studio_template.Validate()
-      yum_repository = YumRepository(self._yum_repository_host,
-                                     self._yum_repository_ssh_identity_key_file,
-                                     self._ssh_path,
-                                     self._packages_directory,
-                                     self._yum_webroot,
-                                     self._yum_repository_subdirectory,
-                                     self._os_base_version_branch,
-                                     configuration_manager)
+      yum_repository = YumRepository(
+          host_name=self._yum_repository_host,
+          ssh_key_file=self._yum_repository_ssh_identity_key_file,
+          ssh_path=self._ssh_path,
+          packages_source=self._packages_directory,
+          webroot=self._yum_webroot,
+          repository_subdirectory=self._yum_repository_subdirectory,
+          os_version_branch=self._os_base_version_branch,
+          configuration_manager=configuration_manager,
+          rsync_path=self._rsync_path,
+          metadata_regenerator=self._yum_repository_metadata_regenerator,
+          user='root')
       yum_repository.Validate()
     except ValidationError, validation_error:
       logging.error(validation_error)
       sys.exit(1)
 
-    yum_repository.CopyVendorPackages(self._remove_builder_repository)
+    yum_repository.CopyVendorPackages(self._keep_builder_repository)
     vmware_studio_template.GenerateBuildProfile()
     vmware_studio.CopyTemplate(vmware_studio_template.final_studio_file_path)
     vmware_studio.BuildAppliance()
@@ -986,12 +1108,15 @@ class Runner(object):
     mappings = dict(argument_name_and_values)
     self.__dict__.update(mappings)
 
-    self._remove_builder_repository = options.remove_builder_repository
+    self._keep_builder_repository = options.keep_builder_repository
     self._verbose = options.verbose
     self._ssh_path = options.ssh_path
     self._yum_webroot = options.yum_webroot
     self._yum_repository_subdirectory = options.yum_repository_subdirectory
     self._os_base_version_branch = options.os_base_version_branch
+    self._rsync_path = options.rsync_path
+    self._yum_repository_metadata_regenerator = (
+        options.yum_repository_metadata_regenerator)
 
 
 def main(arguments):
